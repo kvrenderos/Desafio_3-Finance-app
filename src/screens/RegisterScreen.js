@@ -1,76 +1,288 @@
-import { useState } from "react";
-
+import { useState, useContext } from "react";
 import {
+  SafeAreaView,
+  ScrollView,
   View,
   Text,
   TextInput,
   TouchableOpacity,
   Alert,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from "react-native";
 
-import {
-  createUserWithEmailAndPassword,
-} from "firebase/auth";
-
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../services/firebaseConfig";
+import { AuthContext } from "../context/AuthContext";
 
 export default function RegisterScreen({ navigation }) {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const { login } = useContext(AuthContext);
 
   const handleRegister = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Complete todos los campos");
+    if (!name || !email || !password || !confirmPassword) {
+      Alert.alert("Campos incompletos", "Por favor, completa todos los campos.");
       return;
     }
 
-    try {
-      await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
+    const emailRegex = /\S+@\S+\.\S+/;
+    if (!emailRegex.test(email)) {
+      Alert.alert("Correo inválido", "El formato del correo electrónico no es correcto.");
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert(
+        "Contraseña corta",
+        "La contraseña debe tener mínimo 6 caracteres."
       );
+      return;
+    }
 
-      Alert.alert("Éxito", "Usuario creado");
+    if (password !== confirmPassword) {
+      Alert.alert("Error", "Las contraseñas no coinciden.");
+      return;
+    }
 
-      navigation.navigate("Login");
+    setIsLoading(true);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      // In a real app we'd save 'name' to Firestore here
+      Alert.alert("¡Éxito!", "Cuenta creada exitosamente.", [
+        { text: "OK", onPress: () => navigation.navigate("Login") }
+      ]);
     } catch (error) {
+      setIsLoading(false);
       switch (error.code) {
         case "auth/email-already-in-use":
-          Alert.alert("Error", "Ese correo ya existe");
+          Alert.alert("Error", "Este correo ya está registrado.");
           break;
-
+        case "auth/invalid-email":
+          Alert.alert("Error", "El correo es inválido.");
+          break;
         case "auth/weak-password":
-          Alert.alert(
-            "Error",
-            "La contraseña es demasiado débil"
-          );
+          Alert.alert("Error", "La contraseña es demasiado débil.");
           break;
-
         default:
-          Alert.alert("Error", "No se pudo registrar");
+          Alert.alert("Error", "No se pudo registrar la cuenta. Intenta de nuevo.");
       }
     }
   };
 
   return (
-    <View style={{ padding: 20 }}>
-      <TextInput
-        placeholder="Correo"
-        value={email}
-        onChangeText={setEmail}
-      />
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardView}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.headerContainer}>
+            <Text style={styles.title}>Crear Cuenta</Text>
+            <Text style={styles.subtitle}>Únete a FinanceApp hoy</Text>
+          </View>
 
-      <TextInput
-        placeholder="Contraseña"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+          <View style={styles.formContainer}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Nombre Completo</Text>
+              <TextInput
+                placeholder="Juan Pérez"
+                placeholderTextColor="#64748b"
+                value={name}
+                onChangeText={setName}
+                style={styles.input}
+                autoCapitalize="words"
+              />
+            </View>
 
-      <TouchableOpacity onPress={handleRegister}>
-        <Text>Registrarse</Text>
-      </TouchableOpacity>
-    </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Correo Electrónico</Text>
+              <TextInput
+                placeholder="ejemplo@correo.com"
+                placeholderTextColor="#64748b"
+                value={email}
+                onChangeText={setEmail}
+                style={styles.input}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Contraseña</Text>
+              <TextInput
+                placeholder="••••••••"
+                placeholderTextColor="#64748b"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+                style={styles.input}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Confirmar Contraseña</Text>
+              <TextInput
+                placeholder="••••••••"
+                placeholderTextColor="#64748b"
+                secureTextEntry
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                style={styles.input}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, isLoading && styles.buttonDisabled]}
+              onPress={handleRegister}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Registrarse</Text>
+              )}
+            </TouchableOpacity>
+
+
+
+            <View style={styles.footerContainer}>
+              <Text style={styles.footerText}>¿Ya tienes una cuenta? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate("Login")}>
+                <Text style={styles.linkText}>Inicia Sesión</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#0f172a", // Sleek dark mode slate-900
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+  },
+  headerContainer: {
+    marginBottom: 40,
+    alignItems: "center",
+  },
+  title: {
+    fontSize: 36,
+    fontWeight: "800",
+    color: "#f8fafc",
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#94a3b8",
+    textAlign: "center",
+  },
+  formContainer: {
+    backgroundColor: "#1e293b",
+    padding: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#334155",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    color: "#cbd5e1",
+    marginBottom: 8,
+    fontWeight: "600",
+  },
+  input: {
+    backgroundColor: "#0f172a",
+    borderWidth: 1,
+    borderColor: "#334155",
+    color: "#f8fafc",
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 16,
+  },
+  button: {
+    backgroundColor: "#3b82f6", // Vibrant blue
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 10,
+    shadowColor: "#3b82f6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    backgroundColor: "#2563eb80",
+    shadowOpacity: 0,
+  },
+  buttonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+  footerContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 24,
+  },
+  footerText: {
+    color: "#94a3b8",
+    fontSize: 14,
+  },
+  linkText: {
+    color: "#60a5fa",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  googleButton: {
+    backgroundColor: "#ffffff",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  googleButtonText: {
+    color: "#1e293b",
+    fontSize: 16,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+});
