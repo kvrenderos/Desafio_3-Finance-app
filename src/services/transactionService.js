@@ -11,9 +11,6 @@ import {
 
 const COLLECTION_NAME = 'transactions';
 
-/**
- * Obtiene todas las transacciones de un usuario ordenadas por fecha descendente.
- */
 export const getTransactionsByUserId = async (userId) => {
   try {
     const q = query(
@@ -33,9 +30,6 @@ export const getTransactionsByUserId = async (userId) => {
   }
 };
 
-/**
- * Crea una transacción y actualiza dinámicamente el saldo de la cuenta asociada.
- */
 export const createTransaction = async (transactionData) => {
   try {
     const accountRef = doc(db, 'accounts', transactionData.accountId);
@@ -50,14 +44,12 @@ export const createTransaction = async (transactionData) => {
       const change = transactionData.type === 'expense' ? -transactionData.amount : transactionData.amount;
       const newBalance = currentBalance + change;
 
-      // Generar nuevo documento de transacción dentro de la operación
       const newTransactionRef = doc(collection(db, COLLECTION_NAME));
       transaction.set(newTransactionRef, {
         ...transactionData,
         createdAt: new Date().toISOString().split('T')[0]
       });
 
-      // Actualizar el saldo de la cuenta
       transaction.update(accountRef, { balance: newBalance });
     });
     return true;
@@ -67,9 +59,6 @@ export const createTransaction = async (transactionData) => {
   }
 };
 
-/**
- * Edita una transacción y recalcula el saldo de la cuenta de origen.
- */
 export const updateTransaction = async (transactionId, oldTransaction, newTransactionData) => {
   try {
     const accountRef = doc(db, 'accounts', newTransactionData.accountId);
@@ -82,15 +71,12 @@ export const updateTransaction = async (transactionId, oldTransaction, newTransa
 
       const currentBalance = accountDoc.data().balance || 0;
 
-      // 1. Revertir el impacto económico de la transacción anterior
       const oldChange = oldTransaction.type === 'expense' ? -oldTransaction.amount : oldTransaction.amount;
       let tempBalance = currentBalance - oldChange;
 
-      // 2. Aplicar el impacto de los nuevos valores modificados
       const newChange = newTransactionData.type === 'expense' ? -newTransactionData.amount : newTransactionData.amount;
       const finalBalance = tempBalance + newChange;
 
-      // Guardar cambios concurrentemente
       const txRef = doc(db, COLLECTION_NAME, transactionId);
       transaction.update(txRef, newTransactionData);
       transaction.update(accountRef, { balance: finalBalance });
@@ -102,9 +88,6 @@ export const updateTransaction = async (transactionId, oldTransaction, newTransa
   }
 };
 
-/**
- * Elimina una transacción de la base de datos y restaura el saldo de la cuenta.
- */
 export const deleteTransaction = async (transactionItem) => {
   try {
     const accountRef = doc(db, 'accounts', transactionItem.accountId);
@@ -116,7 +99,7 @@ export const deleteTransaction = async (transactionItem) => {
       }
 
       const currentBalance = accountDoc.data().balance || 0;
-      // Reversión: Si borro un gasto, devuelvo el dinero (+). Si borro un ingreso, lo quito (-).
+      
       const change = transactionItem.type === 'expense' ? transactionItem.amount : -transactionItem.amount;
       const newBalance = currentBalance + change;
 
@@ -131,9 +114,6 @@ export const deleteTransaction = async (transactionItem) => {
   }
 };
 
-/**
- * Auxiliares dinámicos para rellenar los Selectores/Dropdowns del Formulario
- */
 export const getUserAccounts = async (userId) => {
   const q = query(collection(db, 'accounts'), where('userId', '==', userId));
   const snap = await getDocs(q);
