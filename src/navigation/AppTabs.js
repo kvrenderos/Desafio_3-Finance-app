@@ -26,7 +26,6 @@ const tabIcon = (label) => {
     'Inicio': '🏠',
     'Transacciones': '💸',
     'Cuentas': '🏦',
-    'Presupuestos': '📊',
   };
   return icons[label] || '•';
 };
@@ -56,7 +55,6 @@ export default function AppTabs() {
       <Tab.Screen name="Inicio" component={HomeScreen} options={{ title: 'Inicio' }} />
       <Tab.Screen name="Transacciones" component={TransactionsStack} options={{ title: 'Gastos' }} />
       <Tab.Screen name="Cuentas" component={AccountsScreen} options={{ title: 'Cuentas' }} />
-      <Tab.Screen name="Presupuestos" component={BudgetsScreen} options={{ title: 'Presupuesto' }} />
     </Tab.Navigator>
   );
 }

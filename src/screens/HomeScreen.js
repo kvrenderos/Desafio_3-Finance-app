@@ -53,7 +53,7 @@ export default function HomeScreen() {
         {[
           { icon: '💸', label: 'Transacciones', desc: 'Registra ingresos y gastos' },
           { icon: '🏦', label: 'Cuentas', desc: 'Administra tus cuentas' },
-          { icon: '📊', label: 'Presupuestos', desc: 'Define límites mensuales' },
+
         ].map(item => (
           <View key={item.label} style={styles.linkCard}>
             <Text style={styles.linkIcon}>{item.icon}</Text>
