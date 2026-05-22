@@ -1,50 +1,62 @@
 import { db } from './firebaseConfig';
-import {
-  collection,
-  doc,
-  query,
-  where,
+import { 
+  collection, 
+  doc, 
+  query, 
+  where, 
   getDocs,
-  orderBy,
-  runTransaction,
+  runTransaction
 } from 'firebase/firestore';
+import { getAllCategories } from './categoryService';
 
 const COLLECTION_NAME = 'transactions';
 
 export const getTransactionsByUserId = async (userId) => {
   try {
+    // Usar solo un filtro where para evitar requerir índice compuesto
     const q = query(
       collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      orderBy('date', 'desc')
+      where('userId', '==', userId)
     );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    const querySnapshot = await getDocs(q);
+    const transactions = [];
+    querySnapshot.forEach((doc) => {
+      transactions.push({ id: doc.id, ...doc.data() });
+    });
+    // Ordenar por fecha descendente en JavaScript
+    return transactions.sort((a, b) => b.date.localeCompare(a.date));
   } catch (error) {
-    console.error('Error al obtener transacciones:', error);
-    throw error;
+    console.warn("Error al obtener transacciones (retornando vacío): ", error.message);
+    // Retornar array vacío en lugar de lanzar error para que la app siga funcionando
+    return [];
   }
 };
 
 export const createTransaction = async (transactionData) => {
   try {
     const accountRef = doc(db, 'accounts', transactionData.accountId);
-    await runTransaction(db, async (tx) => {
-      const accountDoc = await tx.get(accountRef);
-      if (!accountDoc.exists()) throw new Error('La cuenta seleccionada no existe.');
+    
+    await runTransaction(db, async (transaction) => {
+      const accountDoc = await transaction.get(accountRef);
+      if (!accountDoc.exists()) {
+        throw new Error("La cuenta seleccionada no existe.");
+      }
 
       const currentBalance = accountDoc.data().balance || 0;
-      const change = transactionData.type === 'expense'
-        ? -transactionData.amount
-        : transactionData.amount;
+      const change = transactionData.type === 'expense' ? -transactionData.amount : transactionData.amount;
+      const newBalance = currentBalance + change;
 
-      const newTxRef = doc(collection(db, COLLECTION_NAME));
-      tx.set(newTxRef, { ...transactionData, createdAt: new Date().toISOString() });
-      tx.update(accountRef, { balance: currentBalance + change });
+      const newTransactionRef = doc(collection(db, COLLECTION_NAME));
+      transaction.set(newTransactionRef, {
+        ...transactionData,
+        createdAt: new Date().toISOString().split('T')[0]
+      });
+
+      transaction.update(accountRef, { balance: newBalance });
     });
     return true;
   } catch (error) {
-    console.error('Error al crear transacción:', error);
+    console.error("Error al crear transacción: ", error);
     throw error;
   }
 };
@@ -52,26 +64,28 @@ export const createTransaction = async (transactionData) => {
 export const updateTransaction = async (transactionId, oldTransaction, newTransactionData) => {
   try {
     const accountRef = doc(db, 'accounts', newTransactionData.accountId);
-    await runTransaction(db, async (tx) => {
-      const accountDoc = await tx.get(accountRef);
-      if (!accountDoc.exists()) throw new Error('La cuenta no existe.');
+
+    await runTransaction(db, async (transaction) => {
+      const accountDoc = await transaction.get(accountRef);
+      if (!accountDoc.exists()) {
+        throw new Error("La cuenta no existe.");
+      }
 
       const currentBalance = accountDoc.data().balance || 0;
-      const oldChange = oldTransaction.type === 'expense'
-        ? -oldTransaction.amount
-        : oldTransaction.amount;
-      const newChange = newTransactionData.type === 'expense'
-        ? -newTransactionData.amount
-        : newTransactionData.amount;
-      const finalBalance = currentBalance - oldChange + newChange;
+
+      const oldChange = oldTransaction.type === 'expense' ? -oldTransaction.amount : oldTransaction.amount;
+      let tempBalance = currentBalance - oldChange;
+
+      const newChange = newTransactionData.type === 'expense' ? -newTransactionData.amount : newTransactionData.amount;
+      const finalBalance = tempBalance + newChange;
 
       const txRef = doc(db, COLLECTION_NAME, transactionId);
-      tx.update(txRef, newTransactionData);
-      tx.update(accountRef, { balance: finalBalance });
+      transaction.update(txRef, newTransactionData);
+      transaction.update(accountRef, { balance: finalBalance });
     });
     return true;
   } catch (error) {
-    console.error('Error al actualizar transacción:', error);
+    console.error("Error al actualizar transacción: ", error);
     throw error;
   }
 };
@@ -79,25 +93,35 @@ export const updateTransaction = async (transactionId, oldTransaction, newTransa
 export const deleteTransaction = async (transactionItem) => {
   try {
     const accountRef = doc(db, 'accounts', transactionItem.accountId);
-    await runTransaction(db, async (tx) => {
-      const accountDoc = await tx.get(accountRef);
-      if (!accountDoc.exists()) throw new Error('La cuenta no existe.');
+
+    await runTransaction(db, async (transactionContext) => {
+      const accountDoc = await transactionContext.get(accountRef);
+      if (!accountDoc.exists()) {
+        throw new Error("La cuenta no existe.");
+      }
 
       const currentBalance = accountDoc.data().balance || 0;
-      const reversal = transactionItem.type === 'expense'
-        ? transactionItem.amount
-        : -transactionItem.amount;
+      
+      const change = transactionItem.type === 'expense' ? transactionItem.amount : -transactionItem.amount;
+      const newBalance = currentBalance + change;
 
       const txRef = doc(db, COLLECTION_NAME, transactionItem.id);
-      tx.delete(txRef);
-      tx.update(accountRef, { balance: currentBalance + reversal });
+      transactionContext.delete(txRef);
+      transactionContext.update(accountRef, { balance: newBalance });
     });
     return true;
   } catch (error) {
-    console.error('Error al eliminar transacción:', error);
+    console.error("Error al eliminar transacción: ", error);
     throw error;
   }
 };
 
-// Kept for backwards compatibility (TransactionsScreen still imports this)
-export { getUserAccounts } from './accountService';
+export const getUserAccounts = async (userId) => {
+  const q = query(collection(db, 'accounts'), where('userId', '==', userId));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+};
+
+export const getCategories = async () => {
+  return await getAllCategories();
+};

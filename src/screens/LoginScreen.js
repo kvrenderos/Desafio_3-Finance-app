@@ -48,6 +48,7 @@ export default function LoginScreen({ navigation }) {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const token = userCredential.user.uid;
       await login(token);
+      setIsLoading(false);
     } catch (error) {
       setIsLoading(false);
       switch (error.code) {

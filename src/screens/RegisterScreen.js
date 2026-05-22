@@ -14,7 +14,8 @@ import {
 } from "react-native";
 
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../services/firebaseConfig";
+import { auth, db } from "../services/firebaseConfig";
+import { setDoc, doc } from "firebase/firestore";
 import { AuthContext } from "../context/AuthContext";
 
 export default function RegisterScreen({ navigation }) {
@@ -53,11 +54,20 @@ export default function RegisterScreen({ navigation }) {
 
     setIsLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      // In a real app we'd save 'name' to Firestore here
-      Alert.alert("¡Éxito!", "Cuenta creada exitosamente.", [
-        { text: "OK", onPress: () => navigation.navigate("Login") }
-      ]);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
+      
+      // Guardar usuario en Firestore
+      await setDoc(doc(db, "users", uid), {
+        name,
+        email,
+        createdAt: new Date().toISOString().split('T')[0],
+      });
+      
+      // Login automático
+      await login(uid);
+      
+      Alert.alert("¡Éxito!", "Cuenta creada exitosamente.");
     } catch (error) {
       setIsLoading(false);
       switch (error.code) {

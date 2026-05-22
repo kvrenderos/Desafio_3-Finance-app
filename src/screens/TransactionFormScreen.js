@@ -1,51 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet, Text, View, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, SafeAreaView,
-} from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { auth } from '../services/firebaseConfig';
-import { createTransaction, updateTransaction } from '../services/transactionService';
-import { getUserAccounts } from '../services/accountService';
-
-const EXPENSE_CATEGORIES = [
-  'Alimentación', 'Transporte', 'Vivienda', 'Salud', 'Entretenimiento',
-  'Educación', 'Ropa', 'Servicios', 'Otros',
-];
-const INCOME_CATEGORIES = [
-  'Salario', 'Freelance', 'Negocio', 'Inversiones', 'Regalo', 'Otros',
-];
+import { createTransaction, updateTransaction, getUserAccounts, getCategories } from '../services/transactionService';
 
 export default function TransactionFormScreen({ route, navigation }) {
   const editingTransaction = route.params?.transaction || null;
   const userId = auth.currentUser?.uid;
 
   const [accounts, setAccounts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loadingConfig, setLoadingConfig] = useState(true);
 
   const [amount, setAmount] = useState('');
-  const [type, setType] = useState('expense');
+  const [type, setType] = useState('expense'); 
   const [category, setCategory] = useState('');
-  const [customCategory, setCustomCategory] = useState('');
   const [accountId, setAccountId] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    async function loadRequirements() {
+    async function loadFormRequirements() {
       try {
         const accs = await getUserAccounts(userId);
+        const cats = await getCategories();
         setAccounts(accs);
+        setCategories(cats);
+
         if (accs.length > 0 && !editingTransaction) {
           setAccountId(accs[0].id);
         }
       } catch (err) {
-        Alert.alert('Error', 'No se pudieron cargar las cuentas.');
+        console.error(err);
       } finally {
         setLoadingConfig(false);
       }
     }
-    loadRequirements();
+    loadFormRequirements();
   }, []);
 
   useEffect(() => {
@@ -54,218 +44,242 @@ export default function TransactionFormScreen({ route, navigation }) {
       setType(editingTransaction.type);
       setCategory(editingTransaction.category);
       setAccountId(editingTransaction.accountId);
-      setDescription(editingTransaction.description || '');
+      setDescription(editingTransaction.description);
       setDate(editingTransaction.date);
     }
   }, [editingTransaction]);
 
-  const handleSubmit = async () => {
-    const finalCategory = customCategory.trim() || category;
+  const handleProcessSubmit = async () => {
     if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
-      Alert.alert('Monto inválido', 'Ingresa un monto numérico mayor a cero.');
+      Alert.alert("Dato inválido", "Por favor ingresa un monto numérico mayor a cero.");
       return;
     }
-    if (!finalCategory) {
-      Alert.alert('Categoría requerida', 'Selecciona o escribe una categoría.');
-      return;
-    }
-    if (!accountId) {
-      Alert.alert('Cuenta requerida', 'Selecciona una cuenta para la transacción.');
-      return;
-    }
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      Alert.alert('Fecha inválida', 'La fecha debe tener el formato AAAA-MM-DD.');
+    if (!category || !accountId || !date) {
+      Alert.alert("Campos obligatorios", "Asegúrate de completar el tipo, categoría, cuenta y fecha.");
       return;
     }
 
-    const payload = {
+    const transactionPayload = {
       userId,
       accountId,
       type,
       amount: parseFloat(amount),
-      category: finalCategory,
-      description: description.trim(),
+      category,
+      description,
       date,
     };
 
-    setSaving(true);
     try {
       if (editingTransaction) {
-        await updateTransaction(editingTransaction.id, editingTransaction, payload);
-        Alert.alert('Actualizado', 'Transacción actualizada correctamente.');
+        await updateTransaction(editingTransaction.id, editingTransaction, transactionPayload);
+        Alert.alert("Sincronizado", "Transacción editada correctamente.");
       } else {
-        await createTransaction(payload);
-        Alert.alert('Guardado', 'Transacción registrada con éxito.');
+        await createTransaction(transactionPayload);
+        Alert.alert("Sincronizado", "Transacción registrada con éxito.");
       }
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Error', error.message || 'No se pudo guardar la transacción.');
-    } finally {
-      setSaving(false);
+      Alert.alert("Error de proceso", error.message || "No se pudo guardar la operación en Firestore.");
     }
   };
 
   if (loadingConfig) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Cargando configuración...</Text>
+        <ActivityIndicator size="large" color="#2ecc71" />
+        <Text style={{ marginTop: 10 }}>Preparando requerimientos...</Text>
       </View>
     );
   }
 
-  const categories = type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
-
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>{editingTransaction ? 'Editar Transacción' : 'Nueva Transacción'}</Text>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <Text style={styles.titleHead}>{editingTransaction ? "Modificar Transacción" : "Nueva Transacción"}</Text>
 
-        {/* Tipo */}
-        <Text style={styles.label}>Tipo de movimiento *</Text>
-        <View style={styles.typeRow}>
-          <TouchableOpacity
-            style={[styles.typeBtn, type === 'expense' && styles.typeBtnExpense]}
-            onPress={() => { setType('expense'); setCategory(''); setCustomCategory(''); }}
-          >
-            <Text style={[styles.typeBtnText, type === 'expense' && styles.typeBtnTextActive]}>📉 Gasto</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.typeBtn, type === 'income' && styles.typeBtnIncome]}
-            onPress={() => { setType('income'); setCategory(''); setCustomCategory(''); }}
-          >
-            <Text style={[styles.typeBtnText, type === 'income' && styles.typeBtnTextActive]}>📈 Ingreso</Text>
-          </TouchableOpacity>
-        </View>
+      <Text style={styles.label}>Tipo de movimiento</Text>
+      <View style={styles.typeRow}>
+        <TouchableOpacity 
+          style={[styles.typeBtn, type === 'expense' && styles.activeExpense]} 
+          onPress={() => setType('expense')}
+        >
+          <Text style={type === 'expense' ? styles.textActive : styles.textInactive}>Gasto (-)</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.typeBtn, type === 'income' && styles.activeIncome]} 
+          onPress={() => setType('income')}
+        >
+          <Text style={type === 'income' ? styles.textActive : styles.textInactive}>Ingreso (+)</Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* Monto */}
-        <Text style={styles.label}>Monto ($) *</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="decimal-pad"
-          placeholder="0.00"
-          placeholderTextColor="#475569"
-          value={amount}
-          onChangeText={setAmount}
-        />
+      <Text style={styles.label}>Monto económico ($) *</Text>
+      <TextInput 
+        style={styles.input} 
+        keyboardType="numeric" 
+        placeholder="0.00"
+        value={amount} 
+        onChangeText={setAmount}
+      />
 
-        {/* Cuenta */}
-        <Text style={styles.label}>Cuenta *</Text>
-        {accounts.length === 0 ? (
-          <View style={styles.warningBox}>
-            <Text style={styles.warningText}>⚠️ No tienes cuentas creadas. Ve a la pestaña Cuentas primero.</Text>
-          </View>
-        ) : (
-          <View style={styles.chipRow}>
-            {accounts.map(acc => (
-              <TouchableOpacity
-                key={acc.id}
-                style={[styles.chip, accountId === acc.id && styles.chipSelected,
-                  editingTransaction && { opacity: 0.6 }]}
-                onPress={() => !editingTransaction && setAccountId(acc.id)}
-                disabled={!!editingTransaction}
-              >
-                <Text style={accountId === acc.id ? styles.chipTextActive : styles.chipText}>{acc.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        {editingTransaction && (
-          <Text style={styles.hintText}>* La cuenta no se puede cambiar al editar.</Text>
-        )}
-
-        {/* Categoría */}
-        <Text style={styles.label}>Categoría *</Text>
-        <View style={styles.chipRow}>
-          {categories.map(cat => (
+      <Text style={styles.label}>Cuenta financiera origen *</Text>
+      {accounts.length === 0 ? (
+        <Text style={styles.warningText}>⚠️ No tienes cuentas creadas. Ve al módulo de cuentas primero.</Text>
+      ) : (
+        <View style={styles.selectorContainer}>
+          {accounts.map((acc) => (
             <TouchableOpacity
-              key={cat}
-              style={[styles.chip, category === cat && styles.chipSelected]}
-              onPress={() => { setCategory(cat); setCustomCategory(''); }}
+              key={acc.id}
+              disabled={!!editingTransaction} 
+              style={[styles.selectorItem, accountId === acc.id && styles.selectorItemSelected, editingTransaction && { opacity: 0.6 }]}
+              onPress={() => setAccountId(acc.id)}
             >
-              <Text style={category === cat ? styles.chipTextActive : styles.chipText}>{cat}</Text>
+              <Text style={accountId === acc.id ? styles.textActive : styles.textItem}>{acc.name}</Text>
             </TouchableOpacity>
           ))}
         </View>
-        <TextInput
-          style={styles.input}
-          placeholder="O escribe una categoría personalizada..."
-          placeholderTextColor="#475569"
-          value={customCategory}
-          onChangeText={(v) => { setCustomCategory(v); setCategory(''); }}
-        />
+      )}
 
-        {/* Fecha */}
-        <Text style={styles.label}>Fecha (AAAA-MM-DD) *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ej: 2026-05-21"
-          placeholderTextColor="#475569"
-          value={date}
-          onChangeText={setDate}
-        />
+      <Text style={styles.label}>Categoría de asignación *</Text>
+      <View style={styles.selectorContainer}>
 
-        {/* Descripción */}
-        <Text style={styles.label}>Descripción (opcional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ej: Supermercado La Colonia"
-          placeholderTextColor="#475569"
-          value={description}
-          onChangeText={setDescription}
-        />
+        {categories.filter(c => c.type === type).map((cat) => (
+          <TouchableOpacity
+            key={cat.id}
+            style={[styles.selectorItem, category === cat.name && styles.selectorItemSelected]}
+            onPress={() => setCategory(cat.name)}
+          >
+            <Text style={category === cat.name ? styles.textActive : styles.textItem}>{cat.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <TextInput 
+        style={styles.input} 
+        placeholder="O escribe otra categoría personalizada..." 
+        value={category} 
+        onChangeText={setCategory}
+      />
 
-        <TouchableOpacity
-          style={[styles.btnSubmit, saving && styles.btnDisabled]}
-          onPress={handleSubmit}
-          disabled={saving}
-        >
-          {saving
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnSubmitText}>{editingTransaction ? '✅ Actualizar' : '✅ Guardar Transacción'}</Text>
-          }
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+      <Text style={styles.label}>Fecha (AAAA-MM-DD) *</Text>
+      <TextInput 
+        style={styles.input} 
+        placeholder="Ej: 2026-05-19" 
+        value={date} 
+        onChangeText={setDate}
+      />
+
+      <Text style={styles.label}>Concepto / Descripción breve</Text>
+      <TextInput 
+        style={styles.input} 
+        placeholder="Ej: Compra de despensa semanal" 
+        value={description} 
+        onChangeText={setDescription}
+      />
+
+      <TouchableOpacity style={styles.btnSubmit} onPress={handleProcessSubmit}>
+        <Text style={styles.btnSubmitText}>{editingTransaction ? "Actualizar Registro" : "Confirmar e Insertar"}</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  scroll: { padding: 20, paddingBottom: 50 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  loadingText: { color: '#94a3b8', marginTop: 12, fontSize: 14 },
-  title: { fontSize: 22, fontWeight: '800', color: '#f8fafc', marginBottom: 20 },
-  label: { fontSize: 13, color: '#94a3b8', fontWeight: '600', marginTop: 16, marginBottom: 8 },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 20,
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  titleHead: {
+    color: '#2c3e50',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 15,
+  },
+  label: {
+    color: '#34495e',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  warningText: {
+    color: '#e67e22',
+    fontSize: 12,
+    marginTop: 4,
+  },
   input: {
-    backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155',
-    color: '#f8fafc', padding: 14, borderRadius: 10, fontSize: 15,
+    color: '#2f3640',
+    fontSize: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dcdde1',
+    paddingVertical: 6,
+    marginBottom: 5,
   },
-  typeRow: { flexDirection: 'row', gap: 10 },
+  typeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 10,
+  },
   typeBtn: {
-    flex: 1, padding: 12, borderRadius: 10,
-    borderWidth: 1, borderColor: '#334155', alignItems: 'center',
-    backgroundColor: '#1e293b',
+    flex: 1,
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#dcdde1',
+    borderRadius: 6,
   },
-  typeBtnExpense: { backgroundColor: '#7f1d1d', borderColor: '#ef4444' },
-  typeBtnIncome: { backgroundColor: '#14532d', borderColor: '#22c55e' },
-  typeBtnText: { color: '#64748b', fontWeight: '600' },
-  typeBtnTextActive: { color: '#fff' },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    backgroundColor: '#1e293b', paddingVertical: 6, paddingHorizontal: 12,
-    borderRadius: 20, borderWidth: 1, borderColor: '#334155',
+  activeExpense: {
+    backgroundColor: '#e74c3c',
+    borderColor: '#e74c3c',
   },
-  chipSelected: { backgroundColor: '#3b82f6', borderColor: '#3b82f6' },
-  chipText: { color: '#94a3b8', fontSize: 12 },
-  chipTextActive: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  warningBox: { backgroundColor: '#431407', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#c2410c' },
-  warningText: { color: '#fb923c', fontSize: 13 },
-  hintText: { color: '#475569', fontSize: 11, marginTop: 4 },
+  activeIncome: {
+    backgroundColor: '#2ecc71',
+    borderColor: '#2ecc71',
+  },
+  selectorContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginVertical: 8,
+  },
+  selectorItem: {
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#dcdde1',
+    borderRadius: 4,
+  },
+  selectorItemSelected: {
+    backgroundColor: '#3498db',
+    borderColor: '#3498db',
+  },
+  textItem: {
+    color: '#2c3e50',
+    fontSize: 13,
+  },
+  textActive: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  textInactive: {
+    color: '#7f8c8d',
+  },
   btnSubmit: {
-    backgroundColor: '#3b82f6', padding: 16, borderRadius: 12,
-    alignItems: 'center', marginTop: 28,
+    backgroundColor: '#2ecc71',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 6,
+    marginTop: 30,
+    marginBottom: 50,
   },
-  btnSubmitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  btnDisabled: { opacity: 0.6 },
+  btnSubmitText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });

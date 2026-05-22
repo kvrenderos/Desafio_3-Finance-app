@@ -1,5 +1,6 @@
 import { createContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { initializeCategories } from "../services/categoryService";
 
 export const AuthContext = createContext();
 
@@ -16,6 +17,8 @@ export default function AuthProvider({ children }) {
 
     if (token) {
       setUserToken(token);
+      // Inicializar categorías cuando el usuario está autenticado
+      await initializeCategories();
     }
 
     setLoading(false);
@@ -24,6 +27,8 @@ export default function AuthProvider({ children }) {
   const login = async (token) => {
     await AsyncStorage.setItem("userToken", token);
     setUserToken(token);
+    // Inicializar categorías después del login
+    await initializeCategories();
   };
 
   const logout = async () => {
