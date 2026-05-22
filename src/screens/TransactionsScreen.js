@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, TextInput } from 'react-native';
+import {
+  StyleSheet, Text, View, FlatList, TouchableOpacity,
+  Alert, TextInput, SafeAreaView,
+} from 'react-native';
 import { auth } from '../services/firebaseConfig';
 import { getTransactionsByUserId, deleteTransaction, getUserAccounts } from '../services/transactionService';
 
@@ -8,10 +11,10 @@ export default function TransactionsScreen({ navigation }) {
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const [filterCategory, setFilterCategory] = useState('');
   const [filterAccount, setFilterAccount] = useState('');
-  const [filterType, setFilterType] = useState('all'); // all, income, expense
+  const [filterType, setFilterType] = useState('all');
+  const [filterPeriod, setFilterPeriod] = useState('all'); // all, thisMonth, lastMonth
 
   const userId = auth.currentUser?.uid;
 
@@ -29,83 +32,93 @@ export default function TransactionsScreen({ navigation }) {
       const txData = await getTransactionsByUserId(userId);
       const accData = await getUserAccounts(userId);
       setTransactions(txData);
-      setFilteredTransactions(txData);
       setAccounts(accData);
     } catch (error) {
-      Alert.alert("Error", "Ocurrió un problema al sincronizar los datos.");
+      Alert.alert('Error', 'Ocurrió un problema al sincronizar los datos.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    let result = transactions;
+    let result = [...transactions];
 
     if (filterCategory.trim() !== '') {
-      result = result.filter(t => t.category.toLowerCase().includes(filterCategory.toLowerCase()));
+      result = result.filter(t =>
+        t.category.toLowerCase().includes(filterCategory.toLowerCase())
+      );
     }
-
     if (filterAccount !== '') {
       result = result.filter(t => t.accountId === filterAccount);
     }
-
     if (filterType !== 'all') {
       result = result.filter(t => t.type === filterType);
     }
+    if (filterPeriod !== 'all') {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      let prefix;
+      if (filterPeriod === 'thisMonth') {
+        prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+      } else if (filterPeriod === 'lastMonth') {
+        const lm = month === 0 ? 12 : month;
+        const ly = month === 0 ? year - 1 : year;
+        prefix = `${ly}-${String(lm).padStart(2, '0')}`;
+      }
+      if (prefix) result = result.filter(t => t.date && t.date.startsWith(prefix));
+    }
 
     setFilteredTransactions(result);
-  }, [filterCategory, filterAccount, filterType, transactions]);
+  }, [filterCategory, filterAccount, filterType, filterPeriod, transactions]);
 
   const handleDeleteAlert = (item) => {
     Alert.alert(
-      "Confirmar acción",
-      "¿Estás seguro de que deseas eliminar permanentemente esta transacción? Esto recalculará el balance de tu cuenta.",
+      'Confirmar eliminación',
+      '¿Estás seguro de que deseas eliminar esta transacción? Se recalculará el saldo de la cuenta.',
       [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Eliminar", 
-          style: "destructive", 
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
           onPress: async () => {
             try {
               await deleteTransaction(item);
               loadData();
             } catch (err) {
-              Alert.alert("Error", err.message || "No se pudo eliminar.");
+              Alert.alert('Error', err.message || 'No se pudo eliminar la transacción.');
             }
-          } 
-        }
+          },
+        },
       ]
     );
   };
 
   const getAccountName = (id) => {
     const account = accounts.find(a => a.id === id);
-    return account ? account.name : "Cuenta Desconocida";
+    return account ? account.name : 'Cuenta desconocida';
   };
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
-      <View style={styles.leftCard}>
+      <View style={styles.cardLeft}>
         <Text style={styles.description}>{item.description || 'Sin descripción'}</Text>
-        <Text style={styles.subtext}>Categoría: {item.category}</Text>
-        <Text style={styles.accountText}>Cuenta: {getAccountName(item.accountId)}</Text>
-        <Text style={styles.dateText}>{item.date}</Text>
+        <Text style={styles.subtext}>📂 {item.category}</Text>
+        <Text style={styles.accountText}>🏦 {getAccountName(item.accountId)}</Text>
+        <Text style={styles.dateText}>📅 {item.date}</Text>
       </View>
-      <View style={styles.rightCard}>
+      <View style={styles.cardRight}>
         <Text style={[styles.amount, item.type === 'expense' ? styles.expense : styles.income]}>
           {item.type === 'expense' ? '-' : '+'}${parseFloat(item.amount).toFixed(2)}
         </Text>
         <View style={styles.actionRow}>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => navigation.navigate('TransactionForm', { transaction: item })}
             style={styles.btnEdit}
           >
             <Text style={styles.btnText}>Editar</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={() => handleDeleteAlert(item)} 
-            style={styles.btnDelete}
-          >
+          <TouchableOpacity onPress={() => handleDeleteAlert(item)} style={styles.btnDelete}>
             <Text style={styles.btnText}>Borrar</Text>
           </TouchableOpacity>
         </View>
@@ -113,35 +126,65 @@ export default function TransactionsScreen({ navigation }) {
     </View>
   );
 
+  const TypeChip = ({ label, value }) => (
+    <TouchableOpacity
+      style={[styles.chip, filterType === value && styles.chipActive]}
+      onPress={() => setFilterType(filterType === value ? 'all' : value)}
+    >
+      <Text style={filterType === value ? styles.chipTextActive : styles.chipText}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  const PeriodChip = ({ label, value }) => (
+    <TouchableOpacity
+      style={[styles.chip, filterPeriod === value && styles.chipActivePeriod]}
+      onPress={() => setFilterPeriod(filterPeriod === value ? 'all' : value)}
+    >
+      <Text style={filterPeriod === value ? styles.chipTextActive : styles.chipText}>{label}</Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.filterBox}>
-        <TextInput 
-          placeholder="🔍 Buscar categoría..." 
-          value={filterCategory} 
-          onChangeText={setFilterCategory} 
+        <TextInput
+          placeholder="🔍 Buscar por categoría..."
+          placeholderTextColor="#94a3b8"
+          value={filterCategory}
+          onChangeText={setFilterCategory}
           style={styles.inputSearch}
         />
-        <View style={styles.filterRowButton}>
-          <TouchableOpacity 
-            style={[styles.chip, filterType === 'all' && styles.chipActive]} 
-            onPress={() => setType(filterType === 'all' ? 'all' : 'all')}
-          >
-            <Text style={filterType === 'all' ? styles.chipTextActive : styles.chipText}>Todos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.chip, filterType === 'expense' && styles.chipActiveExpense]} 
-            onPress={() => setFilterType(filterType === 'expense' ? 'all' : 'expense')}
-          >
-            <Text style={filterType === 'expense' ? styles.chipTextActive : styles.chipText}>Gastos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.chip, filterType === 'income' && styles.chipActiveIncome]} 
-            onPress={() => setFilterType(filterType === 'income' ? 'all' : 'income')}
-          >
-            <Text style={filterType === 'income' ? styles.chipTextActive : styles.chipText}>Ingresos</Text>
-          </TouchableOpacity>
+
+        <View style={styles.filterRow}>
+          <TypeChip label="Todos" value="all" />
+          <TypeChip label="Gastos" value="expense" />
+          <TypeChip label="Ingresos" value="income" />
         </View>
+
+        <View style={styles.filterRow}>
+          <PeriodChip label="Mes actual" value="thisMonth" />
+          <PeriodChip label="Mes anterior" value="lastMonth" />
+        </View>
+
+        {accounts.length > 0 && (
+          <View style={[styles.filterRow, { flexWrap: 'wrap' }]}>
+            <TouchableOpacity
+              style={[styles.chip, filterAccount === '' && styles.chipActivePeriod]}
+              onPress={() => setFilterAccount('')}
+            >
+              <Text style={filterAccount === '' ? styles.chipTextActive : styles.chipText}>Todas las cuentas</Text>
+            </TouchableOpacity>
+            {accounts.map(acc => (
+              <TouchableOpacity
+                key={acc.id}
+                style={[styles.chip, filterAccount === acc.id && styles.chipActivePeriod]}
+                onPress={() => setFilterAccount(filterAccount === acc.id ? '' : acc.id)}
+              >
+                <Text style={filterAccount === acc.id ? styles.chipTextActive : styles.chipText}>{acc.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       <FlatList
@@ -150,164 +193,65 @@ export default function TransactionsScreen({ navigation }) {
         renderItem={renderItem}
         refreshing={loading}
         onRefresh={loadData}
-        ListEmptyComponent={<Text style={styles.emptyText}>No hay transacciones registradas o no coinciden con los filtros.</Text>}
+        contentContainerStyle={{ paddingBottom: 80 }}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {loading ? 'Cargando...' : 'No hay transacciones que coincidan con los filtros.'}
+          </Text>
+        }
       />
 
-      <TouchableOpacity 
-        style={styles.fab} 
-        onPress={() => navigation.navigate('TransactionForm')}
-      >
+      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('TransactionForm')}>
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-
-  container: {
-    flex: 1,
-    backgroundColor: '#f9f9f9',
-    padding: 12,
-  },
+  container: { flex: 1, backgroundColor: '#0f172a', padding: 12 },
   filterBox: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
+    backgroundColor: '#1e293b', padding: 12, borderRadius: 12,
+    marginBottom: 12, borderWidth: 1, borderColor: '#334155',
   },
   inputSearch: {
-    backgroundColor: '#f1f1f1',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 8,
+    backgroundColor: '#0f172a', color: '#f8fafc', padding: 10,
+    borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#334155',
   },
-  filterRowButton: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  filterRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   chip: {
-    backgroundColor: '#e0e0e0',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    backgroundColor: '#0f172a', paddingVertical: 5, paddingHorizontal: 12,
+    borderRadius: 16, borderWidth: 1, borderColor: '#334155',
   },
-  chipActive: {
-    backgroundColor: '#34495e',
-  },
-  chipActiveExpense: {
-    backgroundColor: '#e74c3c',
-  },
-  chipActiveIncome: {
-    backgroundColor: '#2ecc71',
-  },
-  chipText: {
-    color: '#333',
-    fontSize: 12,
-  },
-  chipTextActive: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
+  chipActive: { backgroundColor: '#e74c3c', borderColor: '#e74c3c' },
+  chipActivePeriod: { backgroundColor: '#3b82f6', borderColor: '#3b82f6' },
+  chipText: { color: '#94a3b8', fontSize: 12 },
+  chipTextActive: { color: '#fff', fontSize: 12, fontWeight: '700' },
   card: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 8,
-    marginBottom: 10,
-    elevation: 1.5,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#1e293b', padding: 14, borderRadius: 12, marginBottom: 10,
+    borderWidth: 1, borderColor: '#334155',
   },
-  leftCard: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  rightCard: {
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: '100%',
-    minHeight: 65,
-  },
-  description: {
-    color: '#2c3e50',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  subtext: {
-    color: '#7f8c8d',
-    fontSize: 13,
-    marginTop: 2,
-  },
-  accountText: {
-    color: '#95a5a6',
-    fontSize: 12,
-  },
-  dateText: {
-    color: '#bdc3c7',
-    fontSize: 11,
-    marginTop: 4,
-  },
-  amount: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  expense: {
-    color: '#e74c3c',
-  },
-  income: {
-    color: '#2ecc71',
-  },
-
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  btnEdit: {
-    backgroundColor: '#3498db',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 4,
-  },
-  btnDelete: {
-    backgroundColor: '#95a5a6',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 4,
-  },
-  btnText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
+  cardLeft: { flex: 1, paddingRight: 10 },
+  cardRight: { justifyContent: 'space-between', alignItems: 'flex-end', minHeight: 65 },
+  description: { color: '#f1f5f9', fontSize: 15, fontWeight: '600' },
+  subtext: { color: '#64748b', fontSize: 12, marginTop: 3 },
+  accountText: { color: '#475569', fontSize: 12 },
+  dateText: { color: '#334155', fontSize: 11, marginTop: 4 },
+  amount: { fontSize: 17, fontWeight: '800' },
+  expense: { color: '#ef4444' },
+  income: { color: '#22c55e' },
+  actionRow: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  btnEdit: { backgroundColor: '#3b82f6', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 6 },
+  btnDelete: { backgroundColor: '#475569', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 6 },
+  btnText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   fab: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#2ecc71',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    elevation: 4,
+    position: 'absolute', bottom: 20, right: 20,
+    backgroundColor: '#22c55e', width: 56, height: 56,
+    borderRadius: 28, justifyContent: 'center', alignItems: 'center',
+    elevation: 6, shadowColor: '#22c55e', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 8,
   },
-  fabText: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '300',
-  },
-  emptyText: {
-    color: '#95a5a6',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 40,
-  },
+  fabText: { color: '#fff', fontSize: 30, fontWeight: '300', lineHeight: 34 },
+  emptyText: { color: '#475569', fontSize: 14, textAlign: 'center', marginTop: 40 },
 });
