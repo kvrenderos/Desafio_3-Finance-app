@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { auth } from '../services/firebaseConfig';
+import { useTheme } from '../context/ThemeContext';
 import { createAccount, updateAccount } from '../services/accountService';
 
 const ACCOUNT_TYPES = ['Efectivo', 'Tarjeta', 'Banco', 'Ahorro'];
@@ -21,6 +22,7 @@ const ACCOUNT_TYPES = ['Efectivo', 'Tarjeta', 'Banco', 'Ahorro'];
 export default function AccountFormScreen({ route, navigation }) {
   const editingAccount = route.params?.account || null;
   const userId = auth.currentUser?.uid;
+  const { theme } = useTheme();
 
   const [name, setName] = useState('');
   const [type, setType] = useState('Efectivo');
@@ -82,14 +84,14 @@ export default function AccountFormScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
             <TouchableOpacity
               onPress={() => navigation.goBack()}
               style={styles.backButton}
@@ -97,22 +99,22 @@ export default function AccountFormScreen({ route, navigation }) {
               <MaterialCommunityIcons
                 name="chevron-left"
                 size={28}
-                color="#2196F3"
+                color={theme.accent}
               />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>
+            <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
               {editingAccount ? 'Editar Cuenta' : 'Nueva Cuenta'}
             </Text>
             <View style={{ width: 44 }} />
           </View>
 
           {/* Form Content */}
-          <View style={styles.formContainer}>
+          <View style={[styles.formContainer, { backgroundColor: theme.card }]}>
             {/* Nombre */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Nombre de la Cuenta *</Text>
+              <Text style={[styles.label, { color: theme.textSecondary }]}>Nombre de la Cuenta *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: theme.textPrimary, borderColor: theme.border }]}
                 placeholder="Ej: Mi Tarjeta de Crédito"
                 placeholderTextColor="#999"
                 value={name}
@@ -122,7 +124,7 @@ export default function AccountFormScreen({ route, navigation }) {
 
             {/* Tipo de Cuenta */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Tipo de Cuenta *</Text>
+              <Text style={[styles.label, { color: theme.textSecondary }]}>Tipo de Cuenta *</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -158,7 +160,7 @@ export default function AccountFormScreen({ route, navigation }) {
               <View style={styles.inputWithPrefix}>
                 <Text style={styles.currencyPrefix}>$</Text>
                 <TextInput
-                  style={styles.currencyInput}
+                  style={[styles.currencyInput, { color: theme.textPrimary }]}
                   placeholder="0.00"
                   placeholderTextColor="#999"
                   value={initialBalance}
@@ -166,7 +168,7 @@ export default function AccountFormScreen({ route, navigation }) {
                   keyboardType="decimal-pad"
                 />
               </View>
-              <Text style={styles.helperText}>
+              <Text style={[styles.helperText, { color: theme.textMuted }]}>
                 {editingAccount
                   ? 'Edita el balance manualmente si es necesario'
                   : 'Ingresa el balance inicial de esta cuenta'}

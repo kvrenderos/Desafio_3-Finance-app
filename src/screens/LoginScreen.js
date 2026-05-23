@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import {
   SafeAreaView,
   View,
@@ -12,9 +12,14 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-import { signInWithEmailAndPassword } from "firebase/auth";
+import Constants from "expo-constants";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
+import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../services/firebaseConfig";
 import { AuthContext } from "../context/AuthContext";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
@@ -22,6 +27,64 @@ export default function LoginScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const { login } = useContext(AuthContext);
+  const googleAuth = Constants.expoConfig?.extra?.googleAuth || {};
+  const hasGoogleConfig = Boolean(
+    googleAuth.expoClientId ||
+    googleAuth.iosClientId ||
+    googleAuth.androidClientId ||
+    googleAuth.webClientId
+  );
+
+  const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
+    clientId: googleAuth.webClientId || googleAuth.expoClientId || "google-sign-in-not-configured.apps.googleusercontent.com",
+    expoClientId: googleAuth.expoClientId || undefined,
+    iosClientId: googleAuth.iosClientId || undefined,
+    androidClientId: googleAuth.androidClientId || undefined,
+    webClientId: googleAuth.webClientId || undefined,
+  });
+
+  useEffect(() => {
+    const finishGoogleLogin = async () => {
+      if (googleResponse?.type !== "success") return;
+
+      const { id_token: idToken } = googleResponse.params || {};
+      const accessToken = googleResponse.authentication?.accessToken;
+
+      if (!idToken && !accessToken) {
+        Alert.alert("Google Sign-In", "No se recibieron credenciales de Google.");
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const credential = GoogleAuthProvider.credential(idToken, accessToken);
+        const userCredential = await signInWithCredential(auth, credential);
+        await login(userCredential.user.uid);
+      } catch (error) {
+        Alert.alert("Google Sign-In", error.message || "No se pudo iniciar sesion con Google.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    finishGoogleLogin();
+  }, [googleResponse]);
+
+  const handleGoogleLogin = async () => {
+    if (!hasGoogleConfig) {
+      Alert.alert(
+        "Configura Google Sign-In",
+        "Agrega los client IDs de OAuth en app.json > extra.googleAuth para activar este inicio de sesion."
+      );
+      return;
+    }
+
+    try {
+      await promptGoogleAsync();
+    } catch (error) {
+      Alert.alert("Google Sign-In", "No se pudo abrir el flujo de autenticacion.");
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -121,7 +184,14 @@ export default function LoginScreen({ navigation }) {
             )}
           </TouchableOpacity>
 
-
+          <TouchableOpacity
+            style={[styles.googleButton, isLoading && styles.googleButtonDisabled]}
+            onPress={handleGoogleLogin}
+            disabled={isLoading || !googleRequest}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.googleButtonText}>Continuar con Google</Text>
+          </TouchableOpacity>
 
           <View style={styles.footerContainer}>
             <Text style={styles.footerText}>¿No tienes una cuenta? </Text>
@@ -246,5 +316,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     letterSpacing: 0.5,
+  },
+  googleButtonDisabled: {
+    opacity: 0.55,
   },
 });

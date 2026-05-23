@@ -1,6 +1,8 @@
 import { createContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signOut } from "firebase/auth";
 import { initializeCategories } from "../services/categoryService";
+import { auth } from "../services/firebaseConfig";
 
 export const AuthContext = createContext();
 
@@ -32,6 +34,7 @@ export default function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    await signOut(auth).catch(() => {});
     await AsyncStorage.removeItem("userToken");
     setUserToken(null);
   };

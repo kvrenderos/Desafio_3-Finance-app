@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { auth } from '../services/firebaseConfig';
+import { useTheme } from '../context/ThemeContext';
+import { exportMonthlyCsvReport } from '../services/reportService';
 import { getTransactionsByUserId, deleteTransaction, getUserAccounts } from '../services/transactionService';
 
 export default function TransactionsScreen({ navigation }) {
+  const { theme } = useTheme();
   const [transactions, setTransactions] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -66,8 +69,8 @@ export default function TransactionsScreen({ navigation }) {
 
   const handleDeleteAlert = (item) => {
     Alert.alert(
-      "Confirmar acción",
-      "¿Estás seguro de que deseas eliminar permanentemente esta transacción? Esto recalculará el balance de tu cuenta.",
+      "Confirmar accion",
+      "Estas seguro de que deseas eliminar permanentemente esta transaccion? Esto recalculara el balance de tu cuenta.",
       [
         { text: "Cancelar", style: "cancel" },
         { 
@@ -91,13 +94,22 @@ export default function TransactionsScreen({ navigation }) {
     return account ? account.name : "Cuenta Desconocida";
   };
 
+  const handleExportReport = async () => {
+    try {
+      await exportMonthlyCsvReport(transactions, getAccountName);
+    } catch (error) {
+      Alert.alert('Error', error.message || 'No se pudo exportar el reporte.');
+    }
+  };
+
   const renderItem = ({ item }) => (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.leftCard}>
-        <Text style={styles.description}>{item.description || 'Sin descripción'}</Text>
-        <Text style={styles.subtext}>Categoría: {item.category}</Text>
-        <Text style={styles.accountText}>Cuenta: {getAccountName(item.accountId)}</Text>
-        <Text style={styles.dateText}>{item.date}</Text>
+        <Text style={[styles.description, { color: theme.textPrimary }]}>{item.description || 'Sin descripcion'}</Text>
+        <Text style={[styles.subtext, { color: theme.textSecondary }]}>Categoria: {item.category}</Text>
+        <Text style={[styles.accountText, { color: theme.textMuted }]}>Cuenta: {getAccountName(item.accountId)}</Text>
+        <Text style={[styles.dateText, { color: theme.textMuted }]}>{item.date}</Text>
+        {item.receiptUri ? <Text style={styles.receiptBadge}>Recibo adjunto</Text> : null}
       </View>
       <View style={styles.rightCard}>
         <Text style={[styles.amount, item.type === 'expense' ? styles.expense : styles.income]}>
@@ -122,13 +134,17 @@ export default function TransactionsScreen({ navigation }) {
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.filterBox}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.filterBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <TouchableOpacity style={[styles.exportButton, { backgroundColor: theme.accent }]} onPress={handleExportReport}>
+          <Text style={styles.exportButtonText}>Exportar reporte mensual CSV</Text>
+        </TouchableOpacity>
         <TextInput 
-          placeholder="🔍 Buscar categoría..." 
+          placeholder="Buscar categoria..."
+          placeholderTextColor={theme.textMuted}
           value={filterCategory} 
           onChangeText={setFilterCategory} 
-          style={styles.inputSearch}
+          style={[styles.inputSearch, { backgroundColor: theme.cardAlt, color: theme.textPrimary }]}
         />
         <View style={styles.filterRowButton}>
           <TouchableOpacity 
@@ -158,7 +174,7 @@ export default function TransactionsScreen({ navigation }) {
         renderItem={renderItem}
         refreshing={loading}
         onRefresh={loadData}
-        ListEmptyComponent={<Text style={styles.emptyText}>No hay transacciones registradas o no coinciden con los filtros.</Text>}
+        ListEmptyComponent={<Text style={[styles.emptyText, { color: theme.textMuted }]}>No hay transacciones registradas o no coinciden con los filtros.</Text>}
       />
 
       <TouchableOpacity 
@@ -194,6 +210,17 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 6,
     marginBottom: 8,
+  },
+  exportButton: {
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  exportButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
   },
   filterRowButton: {
     flexDirection: 'row',
@@ -232,6 +259,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 10,
     elevation: 1.5,
+    borderWidth: 1,
   },
   leftCard: {
     flex: 1,
@@ -261,6 +289,17 @@ const styles = StyleSheet.create({
     color: '#bdc3c7',
     fontSize: 11,
     marginTop: 4,
+  },
+  receiptBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e8f5e9',
+    color: '#2e7d32',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   amount: {
     fontSize: 17,

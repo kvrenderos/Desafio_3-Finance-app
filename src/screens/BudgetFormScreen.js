@@ -16,10 +16,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { auth } from '../services/firebaseConfig';
 import { createBudget, updateBudget } from '../services/budgetService';
 import { getCategories } from '../services/transactionService';
+import { useTheme } from '../context/ThemeContext';
 
 export default function BudgetFormScreen({ route, navigation }) {
   const editingBudget = route.params?.budget || null;
   const userId = auth.currentUser?.uid;
+  const { theme } = useTheme();
 
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -93,21 +95,21 @@ export default function BudgetFormScreen({ route, navigation }) {
 
   if (loadingCategories) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
+      <View style={[styles.centerContainer, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.accent} />
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
             <TouchableOpacity
               onPress={() => navigation.goBack()}
               style={styles.backButton}
@@ -115,17 +117,17 @@ export default function BudgetFormScreen({ route, navigation }) {
               <MaterialCommunityIcons
                 name="chevron-left"
                 size={28}
-                color="#2196F3"
+                color={theme.accent}
               />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>
+            <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
               {editingBudget ? 'Editar Presupuesto' : 'Nuevo Presupuesto'}
             </Text>
             <View style={{ width: 44 }} />
           </View>
 
           {/* Form Content */}
-          <View style={styles.formContainer}>
+          <View style={[styles.formContainer, { backgroundColor: theme.card }]}>
             {/* Categoría */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Categoría *</Text>

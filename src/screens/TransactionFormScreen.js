@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Image } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
 import { auth } from '../services/firebaseConfig';
+import { useTheme } from '../context/ThemeContext';
 import { createTransaction, updateTransaction, getUserAccounts, getCategories } from '../services/transactionService';
 
 export default function TransactionFormScreen({ route, navigation }) {
   const editingTransaction = route.params?.transaction || null;
   const userId = auth.currentUser?.uid;
+  const { theme } = useTheme();
 
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -17,6 +21,7 @@ export default function TransactionFormScreen({ route, navigation }) {
   const [accountId, setAccountId] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [receiptUri, setReceiptUri] = useState('');
 
   useEffect(() => {
     async function loadFormRequirements() {
@@ -46,8 +51,57 @@ export default function TransactionFormScreen({ route, navigation }) {
       setAccountId(editingTransaction.accountId);
       setDescription(editingTransaction.description);
       setDate(editingTransaction.date);
+      setReceiptUri(editingTransaction.receiptUri || '');
     }
   }, [editingTransaction]);
+
+  const persistReceipt = async (assetUri) => {
+    const extension = assetUri.split('.').pop()?.split('?')[0] || 'jpg';
+    const fileName = `receipt-${Date.now()}.${extension}`;
+    const directory = `${FileSystem.documentDirectory}receipts/`;
+    const dirInfo = await FileSystem.getInfoAsync(directory);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+    }
+    const destination = `${directory}${fileName}`;
+    await FileSystem.copyAsync({ from: assetUri, to: destination });
+    setReceiptUri(destination);
+  };
+
+  const attachReceiptFromCamera = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permiso requerido', 'Necesitamos acceso a la camara para tomar la foto del recibo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.75,
+    });
+
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      await persistReceipt(result.assets[0].uri);
+    }
+  };
+
+  const attachReceiptFromGallery = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permiso requerido', 'Necesitamos acceso a la galeria para adjuntar el recibo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.75,
+    });
+
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      await persistReceipt(result.assets[0].uri);
+    }
+  };
 
   const handleProcessSubmit = async () => {
     if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
@@ -67,6 +121,7 @@ export default function TransactionFormScreen({ route, navigation }) {
       category,
       description,
       date,
+      receiptUri,
     };
 
     try {
@@ -85,15 +140,15 @@ export default function TransactionFormScreen({ route, navigation }) {
 
   if (loadingConfig) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
         <ActivityIndicator size="large" color="#2ecc71" />
-        <Text style={{ marginTop: 10 }}>Preparando requerimientos...</Text>
+        <Text style={{ marginTop: 10, color: theme.textSecondary }}>Preparando requerimientos...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} keyboardShouldPersistTaps="handled">
       <Text style={styles.titleHead}>{editingTransaction ? "Modificar Transacción" : "Nueva Transacción"}</Text>
 
       <Text style={styles.label}>Tipo de movimiento</Text>
@@ -174,6 +229,26 @@ export default function TransactionFormScreen({ route, navigation }) {
         value={description} 
         onChangeText={setDescription}
       />
+
+      <Text style={styles.label}>Foto del recibo</Text>
+      <View style={styles.receiptActions}>
+        <TouchableOpacity style={styles.receiptButton} onPress={attachReceiptFromCamera}>
+          <Text style={styles.receiptButtonText}>Tomar foto</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.receiptButton} onPress={attachReceiptFromGallery}>
+          <Text style={styles.receiptButtonText}>Galeria</Text>
+        </TouchableOpacity>
+      </View>
+      {receiptUri ? (
+        <View style={styles.receiptPreview}>
+          <Image source={{ uri: receiptUri }} style={styles.receiptImage} />
+          <TouchableOpacity onPress={() => setReceiptUri('')}>
+            <Text style={styles.removeReceipt}>Quitar recibo</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <Text style={styles.receiptHint}>Sin recibo adjunto</Text>
+      )}
 
       <TouchableOpacity style={styles.btnSubmit} onPress={handleProcessSubmit}>
         <Text style={styles.btnSubmitText}>{editingTransaction ? "Actualizar Registro" : "Confirmar e Insertar"}</Text>
@@ -281,5 +356,46 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  receiptActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  receiptButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#3498db',
+    borderRadius: 6,
+    padding: 10,
+    alignItems: 'center',
+  },
+  receiptButtonText: {
+    color: '#3498db',
+    fontWeight: '700',
+  },
+  receiptPreview: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#dcdde1',
+    borderRadius: 8,
+    padding: 10,
+    backgroundColor: '#f8f9fa',
+  },
+  receiptImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  removeReceipt: {
+    color: '#e74c3c',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  receiptHint: {
+    color: '#7f8c8d',
+    fontSize: 12,
+    marginTop: 6,
   },
 });

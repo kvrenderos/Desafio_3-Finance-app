@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { auth } from '../services/firebaseConfig';
+import { useTheme } from '../context/ThemeContext';
 import { getUserAccounts, deleteAccount } from '../services/accountService';
 
 export default function AccountsScreen({ navigation }) {
+  const { theme } = useTheme();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
   const userId = auth.currentUser?.uid;
@@ -77,7 +79,7 @@ export default function AccountsScreen({ navigation }) {
   };
 
   const renderAccountItem = ({ item }) => (
-    <View style={styles.accountCard}>
+    <View style={[styles.accountCard, { backgroundColor: theme.card, borderColor: theme.accent }]}>
       <View style={styles.accountLeft}>
         <View
           style={[styles.iconContainer, { backgroundColor: '#e3f2fd' }]}
@@ -89,8 +91,8 @@ export default function AccountsScreen({ navigation }) {
           />
         </View>
         <View style={styles.accountInfo}>
-          <Text style={styles.accountName}>{item.name}</Text>
-          <Text style={styles.accountType}>{item.type || 'Cuenta'}</Text>
+          <Text style={[styles.accountName, { color: theme.textPrimary }]}>{item.name}</Text>
+          <Text style={[styles.accountType, { color: theme.textMuted }]}>{item.type || 'Cuenta'}</Text>
         </View>
       </View>
       <View style={styles.accountRight}>
@@ -126,9 +128,9 @@ export default function AccountsScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mis Cuentas</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Mis Cuentas</Text>
         <TouchableOpacity
           onPress={() => navigation.navigate('AccountForm')}
           style={styles.addButton}
@@ -154,7 +156,7 @@ export default function AccountsScreen({ navigation }) {
         </View>
       ) : (
         <>
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, { backgroundColor: theme.accent }]}>
             <Text style={styles.summaryLabel}>Balance Total</Text>
             <Text style={styles.summaryAmount}>
               ${getTotalBalance().toFixed(2)}

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { auth } from '../services/firebaseConfig';
+import { useTheme } from '../context/ThemeContext';
 import {
   getBudgetsForCurrentMonth,
   deleteBudget,
@@ -20,6 +21,7 @@ import {
 } from '../services/budgetService';
 
 export default function BudgetScreen({ navigation }) {
+  const { theme } = useTheme();
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(false);
   const userId = auth.currentUser?.uid;
@@ -81,7 +83,7 @@ export default function BudgetScreen({ navigation }) {
     const isExceeded = isBudgetExceeded(item.spent, item.limit);
 
     return (
-      <View style={styles.budgetCard}>
+      <View style={[styles.budgetCard, { backgroundColor: theme.card, borderColor: theme.accent }]}>
         <View style={styles.budgetHeader}>
           <View style={styles.categoryInfo}>
             <View
@@ -103,8 +105,8 @@ export default function BudgetScreen({ navigation }) {
               />
             </View>
             <View style={styles.categoryNameContainer}>
-              <Text style={styles.categoryName}>{item.category}</Text>
-              <Text style={styles.spentText}>
+              <Text style={[styles.categoryName, { color: theme.textPrimary }]}>{item.category}</Text>
+              <Text style={[styles.spentText, { color: theme.textMuted }]}>
                 Gastado: ${parseFloat(item.spent).toFixed(2)} / $
                 {parseFloat(item.limit).toFixed(2)}
               </Text>
@@ -176,9 +178,9 @@ export default function BudgetScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Presupuestos</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Presupuestos</Text>
         <TouchableOpacity
           onPress={() => navigation.navigate('BudgetForm')}
           style={styles.addButton}
@@ -207,7 +209,7 @@ export default function BudgetScreen({ navigation }) {
       ) : (
         <>
           {/* Summary Card */}
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, { backgroundColor: theme.card, borderLeftColor: theme.accent }]}>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Total Presupuesto</Text>
