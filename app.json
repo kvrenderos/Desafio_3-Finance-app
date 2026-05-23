@@ -2,6 +2,8 @@
   "expo": {
     "name": "finance-app",
     "slug": "finance-app",
+    "scheme": "finance-app",
+    "owner": "kvrenderosr",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -28,16 +30,12 @@
     },
     "extra": {
       "googleAuth": {
-        "expoClientId": "",
-        "iosClientId": "",
-        "androidClientId": "",
         "webClientId": "416866938367-43bogmncqbinj41qe7rmahl5t3g8j5eu.apps.googleusercontent.com"
       },
       "eas": {
         "projectId": "00420ce9-3233-4987-aeef-3ecd0c6d74c0"
       }
     },
-    "owner": "kvrenderosr",
     "plugins": [
       "expo-web-browser"
     ]

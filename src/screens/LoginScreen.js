@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import Constants from "expo-constants";
+import { ResponseType } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from "firebase/auth";
@@ -28,16 +29,17 @@ export default function LoginScreen({ navigation }) {
 
   const { login } = useContext(AuthContext);
   const googleAuth = Constants.expoConfig?.extra?.googleAuth || {};
+  const redirectUri =
+    googleAuth.redirectUri ||
+    `https://auth.expo.io/@${Constants.expoConfig?.owner}/${Constants.expoConfig?.slug}`;
   const hasGoogleConfig = Boolean(
-    googleAuth.expoClientId ||
-    googleAuth.iosClientId ||
-    googleAuth.androidClientId ||
-    googleAuth.webClientId
+    googleAuth.webClientId && redirectUri
   );
 
   const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-    clientId: googleAuth.webClientId || googleAuth.expoClientId || "google-sign-in-not-configured.apps.googleusercontent.com",
-    expoClientId: googleAuth.expoClientId || undefined,
+    clientId: googleAuth.webClientId || "google-sign-in-not-configured.apps.googleusercontent.com",
+    responseType: ResponseType.IdToken,
+    redirectUri,
     iosClientId: googleAuth.iosClientId || undefined,
     androidClientId: googleAuth.androidClientId || undefined,
     webClientId: googleAuth.webClientId || undefined,
@@ -74,7 +76,7 @@ export default function LoginScreen({ navigation }) {
     if (!hasGoogleConfig) {
       Alert.alert(
         "Configura Google Sign-In",
-        "Agrega los client IDs de OAuth en app.json > extra.googleAuth para activar este inicio de sesion."
+        "Agrega el webClientId y redirectUri en app.json > extra.googleAuth para activar este inicio de sesion."
       );
       return;
     }

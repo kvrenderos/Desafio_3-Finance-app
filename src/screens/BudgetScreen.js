@@ -19,6 +19,7 @@ import {
   isBudgetWarning,
   isBudgetExceeded,
 } from '../services/budgetService';
+import { getMonthlyTransactions } from '../services/dashboardService';
 
 export default function BudgetScreen({ navigation }) {
   const { theme } = useTheme();
@@ -38,7 +39,22 @@ export default function BudgetScreen({ navigation }) {
     setLoading(true);
     try {
       const data = await getBudgetsForCurrentMonth(userId);
-      setBudgets(data);
+      const transactions = await getMonthlyTransactions(userId);
+      const spentByCategory = {};
+      transactions.forEach(t => {
+        if (t.type === 'expense') {
+          const cat = t.category ? t.category.trim().toLowerCase() : '';
+          spentByCategory[cat] = (spentByCategory[cat] || 0) + parseFloat(t.amount || 0);
+        }
+      });
+      const budgetsWithActualSpent = data.map(budget => {
+        const cat = budget.category ? budget.category.trim().toLowerCase() : '';
+        return {
+          ...budget,
+          spent: spentByCategory[cat] || 0
+        };
+      });
+      setBudgets(budgetsWithActualSpent);
     } catch (error) {
       Alert.alert('Error', 'No se pudieron cargar los presupuestos');
     } finally {

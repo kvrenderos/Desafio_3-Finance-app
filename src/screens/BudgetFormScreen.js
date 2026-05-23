@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { auth } from '../services/firebaseConfig';
 import { createBudget, updateBudget } from '../services/budgetService';
 import { getCategories } from '../services/transactionService';
+import { createCategory } from '../services/categoryService';
 import { useTheme } from '../context/ThemeContext';
 
 export default function BudgetFormScreen({ route, navigation }) {
@@ -69,8 +70,17 @@ export default function BudgetFormScreen({ route, navigation }) {
   const handleSave = async () => {
     if (!validateForm()) return;
 
+    // Capitalize category name to maintain consistency
+    const finalCategory = selectedCategory.trim().charAt(0).toUpperCase() + selectedCategory.trim().slice(1).toLowerCase();
+
     setIsLoading(true);
     try {
+      // Check if it's a new category and save it globally
+      const isNewCategory = !categories.some(c => c.name.toLowerCase() === finalCategory.toLowerCase());
+      if (isNewCategory && finalCategory) {
+        await createCategory(finalCategory, '#2196F3');
+      }
+
       if (editingBudget) {
         await updateBudget(editingBudget.id, {
           limit: parseFloat(limit),
@@ -80,7 +90,7 @@ export default function BudgetFormScreen({ route, navigation }) {
         ]);
       } else {
         await createBudget(userId, {
-          category: selectedCategory,
+          category: finalCategory,
           limit: parseFloat(limit),
         });
         Alert.alert('Éxito', 'Presupuesto creado correctamente', [
@@ -134,7 +144,7 @@ export default function BudgetFormScreen({ route, navigation }) {
               <View style={styles.categoryScroll}>
                 {categories.map((cat) => (
                   <TouchableOpacity
-                    key={cat.id}
+                    key={cat.id || cat.name}
                     onPress={() =>
                       setSelectedCategory(cat.name || cat.id)
                     }
@@ -158,6 +168,19 @@ export default function BudgetFormScreen({ route, navigation }) {
                   </TouchableOpacity>
                 ))}
               </View>
+              <TextInput 
+                style={{
+                  color: '#2f3640',
+                  fontSize: 15,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#dcdde1',
+                  paddingVertical: 6,
+                  marginTop: 10,
+                }}
+                placeholder="O escribe otra categoría personalizada..." 
+                value={selectedCategory} 
+                onChangeText={setSelectedCategory}
+              />
             </View>
 
             {/* Límite */}

@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { auth } from '../services/firebaseConfig';
 import { useTheme } from '../context/ThemeContext';
 import { createTransaction, updateTransaction, getUserAccounts, getCategories } from '../services/transactionService';
+import { createCategory } from '../services/categoryService';
 
 export default function TransactionFormScreen({ route, navigation }) {
   const editingTransaction = route.params?.transaction || null;
@@ -113,18 +114,27 @@ export default function TransactionFormScreen({ route, navigation }) {
       return;
     }
 
+    // Capitalize category name to maintain consistency
+    const finalCategory = category.trim().charAt(0).toUpperCase() + category.trim().slice(1).toLowerCase();
+
     const transactionPayload = {
       userId,
       accountId,
       type,
       amount: parseFloat(amount),
-      category,
+      category: finalCategory,
       description,
       date,
       receiptUri,
     };
 
     try {
+      // Check if it's a new category and save it globally
+      const isNewCategory = !categories.some(c => c.name.toLowerCase() === finalCategory.toLowerCase());
+      if (isNewCategory && finalCategory) {
+        await createCategory(finalCategory, '#A3A3A3');
+      }
+
       if (editingTransaction) {
         await updateTransaction(editingTransaction.id, editingTransaction, transactionPayload);
         Alert.alert("Sincronizado", "Transacción editada correctamente.");
@@ -196,10 +206,9 @@ export default function TransactionFormScreen({ route, navigation }) {
 
       <Text style={styles.label}>Categoría de asignación *</Text>
       <View style={styles.selectorContainer}>
-
-        {categories.filter(c => c.type === type).map((cat) => (
+        {categories.map((cat) => (
           <TouchableOpacity
-            key={cat.id}
+            key={cat.id || cat.name}
             style={[styles.selectorItem, category === cat.name && styles.selectorItemSelected]}
             onPress={() => setCategory(cat.name)}
           >
